@@ -1,4 +1,3 @@
-from dotenv import load_dotenv
 from langchain.chains import LLMChain
 from langchain_core.prompts import (
     ChatPromptTemplate,
@@ -10,6 +9,7 @@ from langchain.chains.conversation.memory import ConversationBufferWindowMemory
 from langchain_groq import ChatGroq
 import json
 from datetime import datetime
+import logging
 
 
 def log(message: str):
@@ -22,19 +22,21 @@ def load_ai_config():
     except Exception as e:  
         log(f'load_ai_config: Error loading config: \n{e}')
 
-async def update_ai_config():
+async def reload_ai_config():
     global system_message, verbose
     try: 
         config = load_ai_config()
         system_message = config['system_message']
         verbose = config['verbose']
-        log(f'update_ai_config: Updated config: {config["system_message"], config["verbose"]}')
+        log(f'reload_ai_config: Updated config: {config["system_message"], config["verbose"]}')
+        return True
     except Exception as e:
-        log(f'update_ai_config: Error updating config: \n{e}')
+        log(f'reload_ai_config: Error updating config: \n{e}')
+        return False
 
 async def initialise_groq(GROQ_API_KEY): #init groq/reload config
     log('debug: initialise_groq: Initialising groq')
-    global system_message, memory_length, groq_client, chat_history, memory, verbose
+    global system_message, memory_length, groq_client, chat_history, memory, verbose, max_tokens
 
     # load initial ai config
     config = load_ai_config()
@@ -45,6 +47,7 @@ async def initialise_groq(GROQ_API_KEY): #init groq/reload config
     top_p = config['top_p']
     memory_length = config['memory_length']
     verbose = config['verbose']
+    max_tokens = config['max_tokens']
     log(f'debug: loaded config')
     # init system prompt
     system_prompt = {
@@ -58,13 +61,20 @@ async def initialise_groq(GROQ_API_KEY): #init groq/reload config
         model=model,
         temperature=temperature,
         top_p=top_p,
+        max_tokens=max_tokens,
     )
-    chat_history = [system_prompt]
 
-    memory = ConversationBufferWindowMemory(k=memory_length, memory_key="chat_history", return_messages=True)
+    chat_history = [system_prompt]
+    memory = ConversationBufferWindowMemory(
+        k=memory_length, 
+        memory_key="chat_history", 
+        return_messages=True,
+    )
+
     print('Groq client initialised')
 
 async def groq_response(username, user_message):
+
     log(f'{username} said {user_message}')
     if user_message:
         prompt = ChatPromptTemplate.from_messages(
@@ -90,7 +100,7 @@ async def groq_response(username, user_message):
     )
     try:
         response = conversation.predict(
-            human_input= username + " said " + user_message
+            human_input=f'{username} said {user_message}'
         )
         log(f'Mira said: {response}')
         return response

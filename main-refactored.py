@@ -1,8 +1,10 @@
+from urllib import response
 from dotenv import load_dotenv
 import discord
 import os 
 import json
-from ai import initialise_groq, groq_response, update_ai_config, log
+from ai import initialise_groq, groq_response, reload_ai_config, log
+from ttsmodule import initialise_tts, text_to_speech, reload_tts_config
 
 
 # bot permissions: administrator
@@ -41,6 +43,7 @@ def load_and_apply_config():
 @client.event
 async def on_ready():
     await initialise_groq(GROQ_API_KEY)
+    await initialise_tts()
     # client.loop.create_task(console_listener())
     if not asleep:
         await client.get_channel(channel_id[1]).send('Mira is back')
@@ -66,7 +69,7 @@ async def on_message(message):
         await send_message(message)
 
 async def command_help(message):
-    await message.channel.send('{Commands: $help, $wakeup, $init, $update, $reload, $sleep, $die}')
+    await message.channel.send('{Commands: $help, $wakeup, $init, $reloadai, $reloaddiscord, $reloadtts, $sleep, $die, $join}')
 
 async def command_wakeup(message):
     global asleep
@@ -77,12 +80,13 @@ async def command_init(message):
     log(f'Initialising groq {message.author.name}')
     await initialise_groq(GROQ_API_KEY)
 
-async def command_update(message):
-    if await update_ai_config():
-        await message.channel.send('AI config updated')
+async def command_reloadai(message):
+    if await reload_ai_config():
+        await message.channel.send('{AI config updated}')
 
-async def command_reload(message):
-    await message.channel.send('Reloading discord config')
+async def command_reloaddiscord(message):
+    if await reload_tts_config():
+        await message.channel.send('{Discord config updated}')
     load_and_apply_config()
     
 async def command_sleep(message):
@@ -97,9 +101,10 @@ async def command_die(message):
 
 async def send_message(message):
     if not asleep:
-        await message.channel.send(
-            await groq_response(message.author.name, message.content)
-            )
+        response = await groq_response(message.author.name, message.content)
+        await message.channel.send(response)
+        # if message.author.voice:
+        await text_to_speech(response)
 
 async def console_listener():
     while True:
@@ -111,15 +116,30 @@ async def console_listener():
             print(response)
 
 
+# voice channel stuff
+async def command_reloadtts(message):
+    if await reload_tts_config():
+        await message.channel.send('{TTS config updated}')
+    else:
+        await message.channel.send('{TTS config failed to update}')
+
+
+async def command_joinvc(message):
+    await message.voice.channel.connect()
+    await message.channel.send('{Joined voice channel}')
+
+
 
 commands = {
       '$help': command_help,
       '$wakeup': command_wakeup,
       '$init': command_init,
-      '$update': command_update,
-      '$reload': command_reload,
+      '$reloadai': command_reloadai,
+      '$reloaddiscord': command_reloaddiscord,
+      '$reloadtts': command_reloadtts,
       '$sleep': command_sleep,
-      '$die': command_die
+      '$die': command_die,
+      '$join': command_joinvc
   }
 
 if __name__ == "__main__":
