@@ -10,6 +10,7 @@ from langchain_groq import ChatGroq
 import json
 from datetime import datetime
 import logging
+import asyncio
 
 
 def log(message: str):
@@ -73,8 +74,7 @@ async def initialise_groq(GROQ_API_KEY): #init groq/reload config
 
     print('Groq client initialised')
 
-async def groq_response(username, user_message):
-
+async def groq_response(username, user_message, metadata):
     log(f'{username} said {user_message}')
     if user_message:
         prompt = ChatPromptTemplate.from_messages(
@@ -86,7 +86,7 @@ async def groq_response(username, user_message):
                     variable_name="chat_history"
                 ),
                 HumanMessagePromptTemplate.from_template(
-                    "{human_input}"
+                    "<|start_metadata|>{metadata}<|end_metadata|> {human_input}"
                 ),
             ]
         )
@@ -100,11 +100,25 @@ async def groq_response(username, user_message):
     )
     try:
         response = conversation.predict(
-            human_input=f'{username} said {user_message}'
+            human_input=f'{username} said {user_message}',
+            metadata=metadata
         )
         log(f'Mira said: {response}')
-        return response
+        
     except Exception as e:
         print('Error: ', e)
         response = '{response failed}'
-        return response
+    
+    asyncio.create_task(memory_to_file(response))
+    return response
+
+
+
+    
+async def memory_to_file(response): # prototype implementation of saving memory
+    if '<|start_memory|>' in response:
+        memory = response.split('<|start_memory|>')[1].split('<|end_memory|>')[0]
+        with open('ignore/memory.txt', 'a') as memory_file:
+            memory_file.write(f'{datetime.now().strftime("%Y-%m-%d %H:%M")}: {memory}\n')
+    else:
+        return None

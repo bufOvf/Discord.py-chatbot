@@ -5,6 +5,7 @@ import os
 import json
 from ai import initialise_groq, groq_response, reload_ai_config, log
 from ttsmodule import initialise_tts, text_to_speech, reload_tts_config
+from datetime import datetime
 
 
 # bot permissions: administrator
@@ -100,11 +101,15 @@ async def command_die(message):
     await client.close()
 
 async def send_message(message):
+    metadata = {
+        'time': datetime.now().strftime("%H:%M"),
+        'date': datetime.now().strftime("%Y-%m-%d"),       
+    }
     if not asleep:
-        response = await groq_response(message.author.name, message.content)
+        response = await groq_response(message.author.name, message.content, metadata)
         await message.channel.send(response)
         # if message.author.voice:
-        await text_to_speech(response)
+        # await text_to_speech(response)
 
 async def console_listener():
     while True:
