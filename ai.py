@@ -86,7 +86,10 @@ async def groq_response(username, user_message, metadata):
                     variable_name="chat_history"
                 ),
                 HumanMessagePromptTemplate.from_template(
-                    "<|start_metadata|>{metadata}<|end_metadata|> {human_input}"
+                    "{human_input}"
+                ),
+                SystemMessage(
+                    content=f'Metadata: {json.dumps(metadata)}'
                 ),
             ]
         )
@@ -101,7 +104,6 @@ async def groq_response(username, user_message, metadata):
     try:
         response = conversation.predict(
             human_input=f'{username} said {user_message}',
-            metadata=metadata
         )
         log(f'Mira said: {response}')
         
