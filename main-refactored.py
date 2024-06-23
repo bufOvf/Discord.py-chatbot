@@ -3,7 +3,7 @@ from dotenv import load_dotenv
 import discord
 import os 
 import json
-from ai import initialise_groq, groq_response, reload_ai_config, log
+from ai import initialise_groq, groq_response, reload_ai_config, log, send_system_message
 from ttsmodule import initialise_tts, text_to_speech, reload_tts_config
 from datetime import datetime
 
@@ -19,6 +19,7 @@ intents = discord.Intents.default()
 intents.message_content = True
 
 client = discord.Client(intents=intents)
+# give bot a nickname
 
 
 
@@ -43,11 +44,21 @@ def load_and_apply_config():
 
 @client.event
 async def on_ready():
+    client.user.global_name = 'Mira'
+    ready_channel = client.get_channel(channel_id[0])
     await initialise_groq(GROQ_API_KEY)
     await initialise_tts()
     # client.loop.create_task(console_listener())
+
+    
+
     if not asleep:
-        await client.get_channel(channel_id[1]).send('Mira is back')
+        await ready_channel.send('{Mira is back... }')
+        # messages_context = [message async for message in ready_channel.history(limit=5)]
+        # messages_context = [f'[{message.author.nick}: {message.content}],' if message.author.nick else f'[Mira: {message.content}],' for message in messages_context]
+        # messages_context = 'PREVIOUS MESSAGES: \n{'+'\n'.join(messages_context)+'}'
+        # await send_system_message(messages_context)
+
     log(f'Discord bot {client.user} has launched')
 
 

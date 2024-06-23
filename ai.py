@@ -74,9 +74,9 @@ async def initialise_groq(GROQ_API_KEY): #init groq/reload config
 
     print('Groq client initialised')
 
-async def groq_response(username, user_message, metadata):
-    log(f'{username} said {user_message}')
-    if user_message:
+async def groq_response(username, message, metadata):
+    log(f'{username} said {message}')
+    if message:
         prompt = ChatPromptTemplate.from_messages(
             [
                 SystemMessage(
@@ -103,7 +103,7 @@ async def groq_response(username, user_message, metadata):
     )
     try:
         response = conversation.predict(
-            human_input=f'{username} said {user_message}',
+            human_input=f'{username} said {message}',
         )
         log(f'Mira said: {response}')
         
@@ -114,8 +114,37 @@ async def groq_response(username, user_message, metadata):
     asyncio.create_task(memory_to_file(response))
     return response
 
-
-
+async def send_system_message(message):
+    log(f'sending system message: {message}')
+    if message:
+        prompt = ChatPromptTemplate.from_messages(
+            [
+                SystemMessage(
+                    content=system_message
+                ),
+                MessagesPlaceholder(
+                    variable_name="chat_history"
+                ),
+                SystemMessage(
+                    content=message
+                ),
+            ]
+        )
+        
+    conversation = LLMChain(
+        llm=groq_client,
+        prompt=prompt,
+        verbose=verbose,
+        memory=memory,
+        )  
+     
+    try:
+        response = conversation.predict()
+        log(f'Mira said: {response}')
+        return response
+    except Exception as e:
+        print('Error: ', e)
+        response = '{response failed}'
     
 async def memory_to_file(response): # prototype implementation of saving memory
     if '<|start_memory|>' in response:
