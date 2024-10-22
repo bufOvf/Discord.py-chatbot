@@ -1,10 +1,11 @@
 # from urllib import response
 from dotenv import load_dotenv
 import discord
+import asyncio
 import os 
 import json
 from ai import initialise_groq, groq_response, reload_ai_config, log, send_system_message
-# from ttsmodule import initialise_tts, text_to_speech, reload_tts_config
+from eleven_tts import text_to_speech_file, reload_tts_config
 from datetime import datetime
 
 
@@ -21,9 +22,13 @@ intents = discord.Intents.default()
 intents.message_content = True
 
 client = discord.Client(intents=intents)
-# give bot a nickname
 
-
+tts_output_dir = "./tts_outputs"
+if not os.path.exists(tts_output_dir):
+    os.makedirs(tts_output_dir)
+    log(f"Created directory: {tts_output_dir}")
+else:
+    log(f"Directory already exists: {tts_output_dir}")
 
 def load_config():
     with open('config.json', 'r') as config_file:
@@ -47,14 +52,14 @@ def load_and_apply_config():
 @client.event
 async def on_ready():
     client.user.global_name = 'Mira'
-    ready_channel = client.get_channel(channel_id[1])
+    ready_channel = client.get_channel(channel_id[0])
     await initialise_groq(GROQ_API_KEY)
     # client.loop.create_task(console_listener())
 
     
 
     if not asleep:
-        await ready_channel.send('{Mira is online... }')
+        await ready_channel.send('`Mira is online... `')
         # messages_context = [message async for message in ready_channel.history(limit=5)]
         # messages_context = [f'[{message.author.nick}: {message.content}],' if message.author.nick else f'[Mira: {message.content}],' for message in messages_context]
         # messages_context = 'PREVIOUS MESSAGES: \n{'+'\n'.join(messages_context)+'}'
@@ -79,7 +84,10 @@ async def on_message(message):
         except Exception as e:
             log(f'Error in command: {e}')
     else:
-        await send_message(message)
+        if message.guild.voice_client and message.author.voice and message.author.voice.channel == message.guild.voice_client.channel:
+            await voice_response(message)
+        else:
+            await send_message(message)
 
 async def command_help(message):
     await message.channel.send('`Commands: !help, !wakeup, !init, !reloadai, !reloaddiscord, !reloadtts, !sleep, !die, !join}`')
@@ -98,9 +106,8 @@ async def command_reloadai(message):
         await message.channel.send('`AI config updated`')
 
 async def command_reloaddiscord(message):
-    if await reload_tts_config():
+    if load_and_apply_config():
         await message.channel.send('`Discord config updated`')
-    load_and_apply_config()
     
 async def command_sleep(message):
     global asleep
@@ -141,36 +148,74 @@ async def command_reloadtts(message):
         await message.channel.send('`TTS config failed to update`')
 
 
-async def command_joinvc(message):
-    log(f'Joining voice channel "{message.author.voice.channel.name}"')
-    await message.author.voice.channel.connect()
-    log(f'Joined voice channel "{message.author.voice.channel.name}"')
-    await message.channel.send(f'Joined "{message.author.voice.channel.name}"')
 
 async def command_leavevc(message):
     log(f'Leaving voice channel "{message.author.voice.channel.name}"')
     await message.author.voice.channel.disconnect()
     log(f'Left voice channel "{message.author.voice.channel.name}"')
-    await message.channel.send(f'Left "{message.author.voice.channel.name}"')
+    await message.channel.send(f'`Left "{message.author.voice.channel.name}"`')
 
-async def play_tts(message):
-    # if message.author.voice:
-    #     voice = message.guild.voice_client
-    #     if voice.is_playing():
-    #         voice.stop()
-    #     filename = await text_to_speech(message.content)
-    #     voice.play(discord.FFmpegPCMAudio(filename))
-    pass
+async def command_joinvc(message):
+    if message.author.voice is None:
+        await message.channel.send("`You need to be in a voice channel to use this command.`")
+        return
+
+    voice_channel = message.author.voice.channel
+    voice_client = await voice_channel.connect()
     
+    log(f'Joined voice channel "{voice_channel.name}"')
+    await message.channel.send(f'`Joined "{voice_channel.name}"`')
 
+    welcome_message = await groq_response("system", "Give a short hi", {})
+    audio_file = text_to_speech_file(welcome_message)
+    if audio_file:
+        await play_audio(voice_client, audio_file)
+    else:
+        log("Failed to generate audio response.")
+
+async def voice_response(message):
+    voice_client = message.guild.voice_client
+    if voice_client and voice_client.is_connected():
+        response = await groq_response(message.author.name, message.content, {})
+        audio_file = text_to_speech_file(response)
+        if audio_file:
+            await play_audio(voice_client, audio_file)
+        else:
+            await message.channel.send("Sorry, I couldn't generate the audio response.")
+        await message.channel.send(response)
+
+
+async def play_audio(voice_client, file_path):
+    if not voice_client or not voice_client.is_connected():
+        print("Voice client is not connected.")
+        return
+
+    if voice_client.is_playing():
+        voice_client.stop()
+
+    absolute_path = os.path.abspath(file_path)
+    print(f"Attempting to play file: {absolute_path}")
+    print(f"File exists: {os.path.exists(absolute_path)}")
+
+    if not os.path.exists(absolute_path):
+        print(f"Error: File not found at {absolute_path}")
+        return
+
+    try:
+        voice_client.play(discord.FFmpegPCMAudio(absolute_path), after=lambda e: print('Done playing', e))
+        
+        while voice_client.is_playing():
+            await asyncio.sleep(1)
+    except Exception as e:
+        print(f"Error playing audio: {e}")
 
 commands = {
       '!help': command_help,
       '!wakeup': command_wakeup,
       '!init': command_init,
-      '!reloadai': command_reloadai,
-      '!reloaddiscord': command_reloaddiscord,
-      '!reloadtts': command_reloadtts,
+      '!reai': command_reloadai,
+      '!rediscord': command_reloaddiscord,
+      '!retts': command_reloadtts,
       '!sleep': command_sleep,
       '!join': command_joinvc,
       '!leave': command_leavevc,
