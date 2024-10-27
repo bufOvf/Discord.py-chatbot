@@ -3,3 +3,4 @@
 .vscode
 ignore/
 .cursorignore
+tts_outputs/output.mp3

@@ -84,10 +84,14 @@ async def on_message(message):
         except Exception as e:
             log(f'Error in command: {e}')
     else:
+        metadata = {
+            'time': datetime.now().strftime("%H:%M"),
+            'date': datetime.now().strftime("%Y-%m-%d"),       
+        }
         if message.guild.voice_client and message.author.voice and message.author.voice.channel == message.guild.voice_client.channel:
-            await voice_response(message)
+            await voice_response(message,metadata)
         else:
-            await send_message(message)
+            await send_message(message,metadata)
 
 async def command_help(message):
     await message.channel.send('`Commands: !help, !wakeup, !init, !reloadai, !reloaddiscord, !reloadtts, !sleep, !die, !join}`')
@@ -119,11 +123,7 @@ async def command_die(message):
     log('Discord bot killed')
     await client.close()
 
-async def send_message(message):
-    metadata = {
-        'time': datetime.now().strftime("%H:%M"),
-        'date': datetime.now().strftime("%Y-%m-%d"),       
-    }
+async def send_message(message,metadata):
     if not asleep:
         response = await groq_response(message.author.name, message.content, metadata)
         await message.channel.send(response)
@@ -142,7 +142,7 @@ async def console_listener():
 
 # voice channel stuff
 async def command_reloadtts(message):
-    if await reload_tts_config():
+    if reload_tts_config():
         await message.channel.send('`TTS config updated`')
     else:
         await message.channel.send('`TTS config failed to update`')
@@ -151,7 +151,8 @@ async def command_reloadtts(message):
 
 async def command_leavevc(message):
     log(f'Leaving voice channel "{message.author.voice.channel.name}"')
-    await message.author.voice.channel.disconnect()
+    voice_client = message.guild.voice_client
+    await voice_client.disconnect()
     log(f'Left voice channel "{message.author.voice.channel.name}"')
     await message.channel.send(f'`Left "{message.author.voice.channel.name}"`')
 
@@ -166,23 +167,24 @@ async def command_joinvc(message):
     log(f'Joined voice channel "{voice_channel.name}"')
     await message.channel.send(f'`Joined "{voice_channel.name}"`')
 
-    welcome_message = await groq_response("system", "Give a short hi", {})
+    welcome_message = await groq_response("system", "You just joined discord voice. Give a short hi", {})
     audio_file = text_to_speech_file(welcome_message)
     if audio_file:
         await play_audio(voice_client, audio_file)
     else:
         log("Failed to generate audio response.")
 
-async def voice_response(message):
+async def voice_response(message,metadata):
     voice_client = message.guild.voice_client
     if voice_client and voice_client.is_connected():
-        response = await groq_response(message.author.name, message.content, {})
+        response = await groq_response(message.author.name, message.content, metadata)
+        await message.channel.send(response)
         audio_file = text_to_speech_file(response)
         if audio_file:
             await play_audio(voice_client, audio_file)
         else:
             await message.channel.send("Sorry, I couldn't generate the audio response.")
-        await message.channel.send(response)
+        
 
 
 async def play_audio(voice_client, file_path):

@@ -6,7 +6,7 @@ from elevenlabs.client import ElevenLabs
 
 load_dotenv()
 
-ELEVENLABS_API_KEY = os.getenv("ELEVENLABS_API_KEY")
+ELEVENLABS_API_KEY = os.getenv("ELEVENLABS_API_KEY_2")
 client = ElevenLabs(api_key=ELEVENLABS_API_KEY)
 
 def load_tts_config():
@@ -21,7 +21,7 @@ def reload_tts_config():
     global voice_id, model_id
     try:
         config = load_tts_config()
-        voice_id = config['voice_id_mira']
+        voice_id = config['voice_id_2']
         model_id = config['model_id']
         print('TTS config loaded successfully')
         return True
