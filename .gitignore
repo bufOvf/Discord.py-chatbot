@@ -4,3 +4,4 @@
 ignore/
 .cursorignore
 tts_outputs/output.mp3
+/tts_outputs
